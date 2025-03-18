@@ -137,7 +137,7 @@ steps:
 # Substitution variables
 substitutions:
   _LOCATION: 'us-central1'         # API location (e.g., us-central1)
-  _RAG_CORPUS_ID: 'projects/qwiklabs-gcp-00-ec45a6172538/locations/us-central1/ragCorpora/4611686018427387904'               # ID of the existing RAG corpus
+  _RAG_CORPUS_ID: '4611686018427387904'               # ID of the existing RAG corpus
   _GCS_URIS: 'gs://market_conditions_reports_bucket'                    # GCS URIs of files to import (comma-separated)
   _CHUNK_SIZE: '1000'              # Size of chunks in tokens
   _CHUNK_OVERLAP: '100'            # Overlap between chunks in tokens
