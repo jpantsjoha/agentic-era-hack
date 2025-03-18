@@ -37,15 +37,20 @@ steps:
       CORPUS_NAME=${_CORPUS_NAME}
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
       
+      echo "{
+            \"displayName\": \"${DISPLAY_NAME}\",
+            \"name\": \"${CORPUS_NAME}\"
+        }" > corpus_payload.json
+
+      cat ./corpus_response.json 
+
       # Create the RAG corpus
       curl -X POST \
         -H "Authorization: Bearer $(gcloud auth print-access-token)" \
         -H "Content-Type: application/json" \
+        -v \
         "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
-        -d '{
-          "displayName": "'$${DISPLAY_NAME}'",
-          "name": "'$${CORPUS_NAME}'"
-        }' > ./corpus_response.json
+        -d @corpus_payload.json
       
       # Extract the corpus ID for later use
       cat ./corpus_response.json | jq -r '.name' | cut -d'/' -f6 > ./corpus_id.txt
