@@ -1,0 +1,149 @@
+steps:
+
+# Step 1: Debugging - Print Substitution Values
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'debug-substitutions'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Debugging Substitution Values:"
+      echo "PROJECT_ID: $PROJECT_ID"
+      echo "_LOCATION: ${_LOCATION}"
+      echo "_RAG_CORPUS_ID: ${_RAG_CORPUS_ID}"
+      echo "_GCS_URIS: ${_GCS_URIS}"
+      echo "_CHUNK_SIZE: ${_CHUNK_SIZE}"
+      echo "_CHUNK_OVERLAP: ${_CHUNK_OVERLAP}"
+      echo "_SERVICE_ACCOUNT: ${_SERVICE_ACCOUNT}"
+
+# Step 2: Authentication - Generate access token for Vertex AI
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'authenticate'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      # Show current identity (informational only)
+      echo "Current identity:"
+      gcloud auth list || echo "Could not list auth - continuing anyway"
+      
+      # Set the project explicitly
+      gcloud config set project ${PROJECT_ID}
+      
+      # If a service account email is provided, impersonate it
+      if [ ! -z "${_SERVICE_ACCOUNT}" ]; then
+        echo "Impersonating service account: ${_SERVICE_ACCOUNT}"
+        # Generate and store the access token
+        gcloud auth print-access-token --impersonate-service-account=${_SERVICE_ACCOUNT} > access_token.txt
+        echo "Access token generated and stored for service account impersonation"
+      else
+        # Use the default Cloud Build service account
+        echo "Using default Cloud Build service account"
+        gcloud auth print-access-token > access_token.txt
+        echo "Access token generated and stored for default service account"
+      fi
+      
+      # Verify token was generated
+      if [ -s access_token.txt ]; then
+        echo "✅ Access token successfully generated"
+      else
+        echo "❌ Failed to generate access token"
+        exit 1
+      fi
+
+# Step 3: Import RAG Files
+- name: 'gcr.io/cloud-builders/curl'
+  id: 'import-rag-files'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      apt-get update && apt-get install -y jq curl
+      
+      PROJECT_ID=${PROJECT_ID}
+      LOCATION="${_LOCATION}"
+      RAG_CORPUS_ID="${_RAG_CORPUS_ID}"
+      GCS_URIS="${_GCS_URIS}"
+      CHUNK_SIZE=${_CHUNK_SIZE}
+      CHUNK_OVERLAP=${_CHUNK_OVERLAP}
+      
+      # Create the JSON payload
+      # Convert comma-separated GCS URIs to a JSON array
+      GCS_URIS_ARRAY=$(echo "$${GCS_URIS}" | sed 's/,/","/g')
+      GCS_URIS_ARRAY="[\"$${GCS_URIS_ARRAY}\"]"
+      
+      echo "{
+        \"import_rag_files_config\": {
+          \"gcs_source\": {
+            \"uris\": $${GCS_URIS_ARRAY}
+          },
+          \"rag_file_chunking_config\": {
+            \"chunk_size\": $${CHUNK_SIZE},
+            \"chunk_overlap\": $${CHUNK_OVERLAP}
+          }
+        }
+      }" > import_payload.json
+
+      echo "Payload for RAG file import:"
+      cat import_payload.json
+      
+      # Get the access token from the file created in the authentication step
+      ACCESS_TOKEN=$(cat access_token.txt)
+      
+      echo "Attempting to import RAG files into corpus $${RAG_CORPUS_ID} in project ${PROJECT_ID}, location $${LOCATION}..."
+      
+      # Import RAG files with better error handling
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        -H "Authorization: Bearer $${ACCESS_TOKEN}" \
+        -H "Content-Type: application/json" \
+        "https://$${LOCATION}-aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora/$${RAG_CORPUS_ID}/ragFiles:import" \
+        -d @import_payload.json)
+      
+      # Extract the HTTP status code
+      HTTP_STATUS=$(echo "$${RESPONSE}" | tail -n1)
+      # Extract the response body
+      RESPONSE_BODY=$(echo "$${RESPONSE}" | sed '$ d')
+      
+      echo "Response status code: $${HTTP_STATUS}"
+      echo "Response body:"
+      echo "$${RESPONSE_BODY}" | jq . || echo "$${RESPONSE_BODY}"
+      
+      # Check if the request was successful
+      if [[ "$${HTTP_STATUS}" -ge 200 && "$${HTTP_STATUS}" -lt 300 ]]; then
+        echo "✅ RAG files import initiated successfully!"
+        echo "Note: The import process may continue asynchronously. Check the operation status in the response."
+      else
+        echo "❌ Failed to import RAG files. Status code: $${HTTP_STATUS}"
+        
+        # Provide more detailed error information
+        if [[ "$${HTTP_STATUS}" -eq 401 || "$${HTTP_STATUS}" -eq 403 ]]; then
+          echo "Authentication or permission error. Please ensure:"
+          echo "1. The service account has the 'Vertex AI User' role (roles/aiplatform.user)"
+          echo "2. The Vertex AI API is enabled in your project"
+          echo "3. If using service account impersonation, the impersonating account has permission to impersonate"
+        elif [[ "$${HTTP_STATUS}" -eq 404 ]]; then
+          echo "Resource not found. Please ensure:"
+          echo "1. The RAG corpus ID exists: $${RAG_CORPUS_ID}"
+          echo "2. The location is correct: $${LOCATION}"
+        elif [[ "$${HTTP_STATUS}" -eq 400 ]]; then
+          echo "Bad request. Please check:"
+          echo "1. The GCS URIs are valid and accessible: $${GCS_URIS}"
+          echo "2. The chunk size and overlap values are valid"
+        fi
+        
+        exit 1
+      fi
+
+# Substitution variables
+substitutions:
+  _LOCATION: 'us-central1'         # API location (e.g., us-central1)
+  _RAG_CORPUS_ID: 'projects/qwiklabs-gcp-00-ec45a6172538/locations/us-central1/ragCorpora/4611686018427387904'               # ID of the existing RAG corpus
+  _GCS_URIS: 'gs://market_conditions_reports_bucket'                    # GCS URIs of files to import (comma-separated)
+  _CHUNK_SIZE: '1000'              # Size of chunks in tokens
+  _CHUNK_OVERLAP: '100'            # Overlap between chunks in tokens
+  _SERVICE_ACCOUNT: ''             # Optional: Service account email to impersonate (must have Vertex AI permissions)
+
+timeout: '1800s'  # 30-minute timeout
+
+options:
+  logging: CLOUD_LOGGING_ONLY
