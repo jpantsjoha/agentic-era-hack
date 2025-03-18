@@ -1,9 +1,5 @@
 
-# About
-
-
-
-## market-conditions-agent
+## About market-conditions-agent
 
 A agent implementing a base ReAct agent using LangGraph
 Agent generated with [`googleCloudPlatform/agent-starter-pack`](https://github.com/GoogleCloudPlatform/agent-starter-pack)
