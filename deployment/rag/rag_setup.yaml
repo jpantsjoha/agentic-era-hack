@@ -25,6 +25,8 @@ steps:
   args:
     - '-c'
     - |
+      apt-get update && apt-get install -y jq curl
+      jq --version # Verify jq is installed
       TOKEN=$(cat /workspace/token.txt)
       PROJECT_ID=${PROJECT_ID}
       LOCATION="${_LOCATION}"
