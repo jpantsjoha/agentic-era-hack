@@ -1,6 +1,6 @@
 steps:
 # Step 1: Set up environment - Install required tools
-- name: 'gcr.io/cloud-builders/debian-slim'
+- name: 'gcr.io/cloud-builders/curl'
   id: 'install-dependencies'
   entrypoint: 'bash'
   args:
@@ -8,7 +8,7 @@ steps:
     - |
       apt-get update && apt-get install -y jq curl
       jq --version # Verify jq is installed
-      
+
 # Step 2: Authenticate with Google Cloud
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'authenticate'
