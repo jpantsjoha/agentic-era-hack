@@ -12,24 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resource "google_storage_bucket" "bucket_load_test_results" {
-  name                        = "${var.cicd_runner_project_id}-${var.suffix_bucket_name_load_test_results}"
-  location                    = var.region
-  project                     = var.cicd_runner_project_id
-  uniform_bucket_level_access = true
-  force_destroy               = true
-  depends_on                  = [resource.google_project_service.cicd_services, resource.google_project_service.shared_services]
-}
-
 resource "google_storage_bucket" "logs_data_bucket" {
-  for_each                    = toset(local.all_project_ids)
-  name                        = "${each.value}-logs-data"
+  name                        = "${var.dev_project_id}-logs-data"
   location                    = var.region
-  project                     = each.value
+  project                     = var.dev_project_id
   uniform_bucket_level_access = true
-  force_destroy               = true
 
-  depends_on = [resource.google_project_service.cicd_services, resource.google_project_service.shared_services]
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = all
+  }
+  depends_on = [resource.google_project_service.services]
 }
 
-
+# Market conditions agent reports bucket for storing analysis reports
+resource "google_storage_bucket" "market_conditions_reports_bucket" {
+  name                        = "${var.dev_project_id}-market-conditions-reports"
+  location                    = var.region
+  project                     = var.dev_project_id
+  uniform_bucket_level_access = true
+  force_destroy               = false  # Set to true only if you want to allow Terraform to delete a non-empty bucket
+  
+  # Optional: Configure versioning for important data
+  versioning {
+    enabled = true
+  }
+  
+  # Optional: Configure lifecycle rules for cost optimization
+  lifecycle_rule {
+    condition {
+      age = 90  # Days
+    }
+    action {
+      type = "Delete"  # Or "SetStorageClass" with storage_class = "NEARLINE" or "COLDLINE"
+    }
+  }
+  
+  depends_on = [resource.google_project_service.services]
+}
