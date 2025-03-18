@@ -9,16 +9,7 @@ steps:
       apt-get update && apt-get install -y jq curl
       jq --version # Verify jq is installed
 
-# Step 2: Authenticate with Google Cloud
-- name: 'gcr.io/cloud-builders/gcloud'
-  id: 'authenticate'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      gcloud auth print-access-token > /workspace/token.txt
-
-# Step 2.5: Debugging - Print Substitution Values
+# Step 2: Debugging - Print Substitution Values
 - name: 'gcr.io/cloud-builders/gcloud'  # You can use any image with echo
   id: 'debug-substitutions'
   entrypoint: 'bash'
@@ -40,7 +31,6 @@ steps:
     - |
       apt-get update && apt-get install -y jq curl
       jq --version # Verify jq is installed
-      TOKEN=$(cat /workspace/token.txt)
       PROJECT_ID=${PROJECT_ID}
       LOCATION="${_LOCATION}"
       CORPUS_NAME=${_CORPUS_NAME}
@@ -48,7 +38,7 @@ steps:
       
       # Create the RAG corpus
       curl -X POST \
-        -H "Authorization: Bearer $${TOKEN}" \
+        -H "Authorization: Bearer $(gcloud auth print-access-token)" \
         -H "Content-Type: application/json" \
         "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
         -d '{
