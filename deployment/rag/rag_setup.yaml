@@ -37,7 +37,7 @@ steps:
       curl -X POST \
         -H "Authorization: Bearer $${TOKEN}" \
         -H "Content-Type: application/json" \
-        "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/$${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
+        "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
         -d '{
           "displayName": "'$${DISPLAY_NAME}'",
           "name": "'$${CORPUS_NAME}'"
