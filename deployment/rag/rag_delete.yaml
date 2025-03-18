@@ -1,0 +1,118 @@
+steps:
+
+# Step 1: Debugging - Print Substitution Values
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'debug-substitutions'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Debugging Substitution Values:"
+      echo "PROJECT_ID: $PROJECT_ID"
+      echo "_LOCATION: ${_LOCATION}"
+      echo "_RAG_CORPUS_ID: ${_RAG_CORPUS_ID}"
+      echo "_SERVICE_ACCOUNT: ${_SERVICE_ACCOUNT}"
+
+# Step 2: Authentication - Generate access token for Vertex AI
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'authenticate'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      # Show current identity (informational only)
+      echo "Current identity:"
+      gcloud auth list || echo "Could not list auth - continuing anyway"
+      
+      # Set the project explicitly
+      gcloud config set project ${PROJECT_ID}
+      
+      # If a service account email is provided, impersonate it
+      if [ ! -z "${_SERVICE_ACCOUNT}" ]; then
+        echo "Impersonating service account: ${_SERVICE_ACCOUNT}"
+        # Generate and store the access token
+        gcloud auth print-access-token --impersonate-service-account=${_SERVICE_ACCOUNT} > access_token.txt
+        echo "Access token generated and stored for service account impersonation"
+      else
+        # Use the default Cloud Build service account
+        echo "Using default Cloud Build service account"
+        gcloud auth print-access-token > access_token.txt
+        echo "Access token generated and stored for default service account"
+      fi
+      
+      # Verify token was generated
+      if [ -s access_token.txt ]; then
+        echo "✅ Access token successfully generated"
+      else
+        echo "❌ Failed to generate access token"
+        exit 1
+      fi
+
+# Step 3: Delete RAG Corpus
+- name: 'gcr.io/cloud-builders/curl'
+  id: 'delete-rag-corpus'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      apt-get update && apt-get install -y jq curl
+      
+      PROJECT_ID=${PROJECT_ID}
+      LOCATION="${_LOCATION}"
+      RAG_CORPUS_ID="${_RAG_CORPUS_ID}"
+      
+      # Get the access token from the file created in the authentication step
+      ACCESS_TOKEN=$(cat access_token.txt)
+      
+      echo "Attempting to delete RAG corpus $${RAG_CORPUS_ID} in project ${PROJECT_ID}, location $${LOCATION}..."
+      
+      # Delete RAG corpus with better error handling
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+        -H "Authorization: Bearer $${ACCESS_TOKEN}" \
+        "https://$${LOCATION}-aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora/$${RAG_CORPUS_ID}")
+      
+      # Extract the HTTP status code
+      HTTP_STATUS=$(echo "$${RESPONSE}" | tail -n1)
+      # Extract the response body
+      RESPONSE_BODY=$(echo "$${RESPONSE}" | sed '$ d')
+      
+      echo "Response status code: $${HTTP_STATUS}"
+      echo "Response body:"
+      if [ ! -z "$${RESPONSE_BODY}" ]; then
+        echo "$${RESPONSE_BODY}" | jq . || echo "$${RESPONSE_BODY}"
+      else
+        echo "No response body (expected for successful DELETE operations)"
+      fi
+      
+      # Check if the request was successful
+      if [[ "$${HTTP_STATUS}" -ge 200 && "$${HTTP_STATUS}" -lt 300 ]]; then
+        echo "✅ RAG corpus deleted successfully!"
+        echo "Note: The deletion process may continue asynchronously."
+      else
+        echo "❌ Failed to delete RAG corpus. Status code: $${HTTP_STATUS}"
+        
+        # Provide more detailed error information
+        if [[ "$${HTTP_STATUS}" -eq 401 || "$${HTTP_STATUS}" -eq 403 ]]; then
+          echo "Authentication or permission error. Please ensure:"
+          echo "1. The service account has the 'Vertex AI User' role (roles/aiplatform.user)"
+          echo "2. The Vertex AI API is enabled in your project"
+          echo "3. If using service account impersonation, the impersonating account has permission to impersonate"
+        elif [[ "$${HTTP_STATUS}" -eq 404 ]]; then
+          echo "Resource not found. Please ensure:"
+          echo "1. The RAG corpus ID exists: $${RAG_CORPUS_ID}"
+          echo "2. The location is correct: $${LOCATION}"
+        fi
+        
+        exit 1
+      fi
+
+# Substitution variables
+substitutions:
+  _LOCATION: 'us-central1'         # API location (e.g., us-central1)
+  _RAG_CORPUS_ID: ''               # ID of the RAG corpus to delete
+  _SERVICE_ACCOUNT: ''             # Optional: Service account email to impersonate (must have Vertex AI permissions)
+
+timeout: '1800s'  # 30-minute timeout
+
+options:
+  logging: CLOUD_LOGGING_ONLY
