@@ -1,13 +1,4 @@
 steps:
-# Step 1: Set up environment - Install required tools
-- name: 'gcr.io/cloud-builders/curl'
-  id: 'install-dependencies'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      apt-get update && apt-get install -y jq curl
-      jq --version # Verify jq is installed
 
 # Step 2: Debugging - Print Substitution Values
 - name: 'gcr.io/cloud-builders/gcloud'  # You can use any image with echo
@@ -38,7 +29,7 @@ steps:
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
       
       echo "{
-            \"displayName\": \"rag corpus macro data",
+            \"displayName\": \"rag corpus macro data\",
             \"name\": \"my-corpus-rag\"
         }" > corpus_payload.json
 
