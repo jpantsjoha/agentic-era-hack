@@ -13,6 +13,41 @@ steps:
       echo "_CORPUS_NAME: ${_CORPUS_NAME}"
       echo "_CORPUS_DISPLAY_NAME: ${_CORPUS_DISPLAY_NAME}"
 
+# Step 2.5: Authentication - Ensure proper authentication for Vertex AI
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'authenticate'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      # Verify current identity
+      echo "Current service account:"
+      gcloud auth list
+      
+      # If a service account email is provided, impersonate it
+      if [ ! -z "${_SERVICE_ACCOUNT}" ]; then
+        echo "Impersonating service account: ${_SERVICE_ACCOUNT}"
+        # Generate and store the access token
+        gcloud auth print-access-token --impersonate-service-account=${_SERVICE_ACCOUNT} > /workspace/access_token.txt
+        echo "Access token generated and stored for service account impersonation"
+      else
+        # Use the default Cloud Build service account
+        echo "Using default Cloud Build service account"
+        gcloud auth print-access-token > /workspace/access_token.txt
+        echo "Access token generated and stored for default service account"
+      fi
+      
+      # Verify project and API access
+      echo "Verifying Vertex AI API access..."
+      gcloud services list --enabled | grep aiplatform || echo "Warning: Vertex AI API may not be enabled"
+      
+      # Set the project explicitly
+      gcloud config set project ${PROJECT_ID}
+      
+      # Verify permissions
+      echo "Checking permissions..."
+      gcloud projects get-iam-policy ${PROJECT_ID} --format=json | grep -i aiplatform || echo "Warning: No explicit Vertex AI permissions found"
+
 # Step 3: Create a RAG Corpus
 - name: 'gcr.io/cloud-builders/curl'
   id: 'create-rag-corpus'
@@ -33,11 +68,14 @@ steps:
             \"name\": \"my-corpus-rag\"
         }" > corpus_payload.json
 
-      cat ./corpus_payload.json 
+      cat corpus_payload.json 
 
+      # Get the access token from the file created in the authentication step
+      ACCESS_TOKEN=$(cat /workspace/access_token.txt)
+      
       # Create the RAG corpus
       curl -X POST \
-        -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+        -H "Authorization: Bearer ${ACCESS_TOKEN}" \
         -H "Content-Type: application/json" \
         -v \
         "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
@@ -50,6 +88,7 @@ substitutions:
   _LOCATION: 'us-central1'         # API location (e.g., us-central1)
   _CORPUS_NAME: 'my-rag-corpus'    # Corpus name
   _CORPUS_DISPLAY_NAME: 'My RAG Corpus'  # Human-readable corpus name
+  _SERVICE_ACCOUNT: ''             # Optional: Service account email to impersonate (must have Vertex AI permissions)
  
 
 timeout: '1800s'  # 30-minute timeout
