@@ -1,0 +1,58 @@
+steps:
+# Step 1: Set up environment - Install required tools
+- name: 'gcr.io/cloud-builders/curl'
+  id: 'install-dependencies'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      apt-get update && apt-get install -y jq
+
+# Step 2: Authenticate with Google Cloud
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: 'authenticate'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      gcloud auth print-access-token > /workspace/token.txt
+
+# Step 3: Create a RAG Corpus
+- name: 'gcr.io/cloud-builders/curl'
+  id: 'create-rag-corpus'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      TOKEN=$(cat /workspace/token.txt)
+      PROJECT_ID=${PROJECT_ID}
+      LOCATION="${_LOCATION}"
+      CORPUS_NAME=${_CORPUS_NAME}
+      DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
+      
+      # Create the RAG corpus
+      curl -X POST \
+        -H "Authorization: Bearer $${TOKEN}" \
+        -H "Content-Type: application/json" \
+        "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/$${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
+        -d '{
+          "displayName": "'$${DISPLAY_NAME}'",
+          "name": "'$${CORPUS_NAME}'"
+        }' > /workspace/corpus_response.json
+      
+      # Extract the corpus ID for later use
+      cat /workspace/corpus_response.json | jq -r '.name' | cut -d'/' -f6 > /workspace/corpus_id.txt
+      echo "Created RAG Corpus: $$(cat /workspace/corpus_id.txt)"
+
+
+# Substitution variables
+substitutions:
+  _LOCATION: 'us-central1'         # API location (e.g., us-central1)
+  _CORPUS_NAME: 'my-rag-corpus'    # Corpus name
+  _CORPUS_DISPLAY_NAME: 'My RAG Corpus'  # Human-readable corpus name
+ 
+
+timeout: '1800s'  # 30-minute timeout
+
+options:
+  logging: CLOUD_LOGGING_ONLY
