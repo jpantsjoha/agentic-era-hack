@@ -38,8 +38,8 @@ steps:
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
       
       echo "{
-            \"displayName\": \"${DISPLAY_NAME}\",
-            \"name\": \"${CORPUS_NAME}\"
+            \"displayName\": \"$DISPLAY_NAME\",
+            \"name\": \"$CORPUS_NAME\"
         }" > corpus_payload.json
 
       cat ./corpus_response.json 
