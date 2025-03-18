@@ -28,12 +28,12 @@ steps:
       if [ ! -z "${_SERVICE_ACCOUNT}" ]; then
         echo "Impersonating service account: ${_SERVICE_ACCOUNT}"
         # Generate and store the access token
-        gcloud auth print-access-token --impersonate-service-account=${_SERVICE_ACCOUNT} > /workspace/access_token.txt
+        gcloud auth print-access-token --impersonate-service-account=${_SERVICE_ACCOUNT} > access_token.txt
         echo "Access token generated and stored for service account impersonation"
       else
         # Use the default Cloud Build service account
         echo "Using default Cloud Build service account"
-        gcloud auth print-access-token > /workspace/access_token.txt
+        gcloud auth print-access-token > access_token.txt
         echo "Access token generated and stored for default service account"
       fi
       
@@ -71,11 +71,11 @@ steps:
       cat corpus_payload.json 
 
       # Get the access token from the file created in the authentication step
-      ACCESS_TOKEN=$(cat /workspace/access_token.txt)
+      ACCESS_TOKEN=$(cat access_token.txt)
       
       # Create the RAG corpus
       curl -X POST \
-        -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+        -H "Authorization: Bearer $${ACCESS_TOKEN}" \
         -H "Content-Type: application/json" \
         -v \
         "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
