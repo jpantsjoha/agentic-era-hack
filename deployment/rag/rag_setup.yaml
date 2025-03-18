@@ -18,6 +18,19 @@ steps:
     - |
       gcloud auth print-access-token > /workspace/token.txt
 
+# Step 2.5: Debugging - Print Substitution Values
+- name: 'gcr.io/cloud-builders/gcloud'  # You can use any image with echo
+  id: 'debug-substitutions'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      echo "Debugging Substitution Values:"
+      echo "PROJECT_ID: $PROJECT_ID"
+      echo "_LOCATION: ${_LOCATION}"
+      echo "_CORPUS_NAME: ${_CORPUS_NAME}"
+      echo "_CORPUS_DISPLAY_NAME: ${_CORPUS_DISPLAY_NAME}"
+
 # Step 3: Create a RAG Corpus
 - name: 'gcr.io/cloud-builders/curl'
   id: 'create-rag-corpus'
@@ -28,16 +41,10 @@ steps:
       apt-get update && apt-get install -y jq curl
       jq --version # Verify jq is installed
       TOKEN=$(cat /workspace/token.txt)
-
-      echo "TOKEN: $TOKEN"
       PROJECT_ID=${PROJECT_ID}
-      echo "PROJECT_ID: $PROJECT_ID"
       LOCATION="${_LOCATION}"
-      echo "LOCATION: $LOCATION"
       CORPUS_NAME=${_CORPUS_NAME}
-      echo "CORPUS_NAME: $CORPUS_NAME"
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
-      echo "DISPLAY_NAME: $DISPLAY_NAME"
       
       # Create the RAG corpus
       curl -X POST \
