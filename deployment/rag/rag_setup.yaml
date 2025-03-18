@@ -30,7 +30,8 @@ steps:
     - '-c'
     - |
       apt-get update && apt-get install -y jq curl
-      jq --version # Verify jq is installed
+      jq --version 
+
       PROJECT_ID=${PROJECT_ID}
       LOCATION="${_LOCATION}"
       CORPUS_NAME=${_CORPUS_NAME}
@@ -44,11 +45,11 @@ steps:
         -d '{
           "displayName": "'$${DISPLAY_NAME}'",
           "name": "'$${CORPUS_NAME}'"
-        }' > /workspace/corpus_response.json
+        }' > ./corpus_response.json
       
       # Extract the corpus ID for later use
-      cat /workspace/corpus_response.json | jq -r '.name' | cut -d'/' -f6 > /workspace/corpus_id.txt
-      echo "Created RAG Corpus: $$(cat /workspace/corpus_id.txt)"
+      cat ./corpus_response.json | jq -r '.name' | cut -d'/' -f6 > ./corpus_id.txt
+      echo "Created RAG Corpus: $$(cat ./corpus_id.txt)"
 
 
 # Substitution variables
