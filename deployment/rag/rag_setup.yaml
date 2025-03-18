@@ -13,16 +13,19 @@ steps:
       echo "_CORPUS_NAME: ${_CORPUS_NAME}"
       echo "_CORPUS_DISPLAY_NAME: ${_CORPUS_DISPLAY_NAME}"
 
-# Step 2.5: Authentication - Ensure proper authentication for Vertex AI
+# Step 2.5: Authentication - Generate access token for Vertex AI
 - name: 'gcr.io/cloud-builders/gcloud'
   id: 'authenticate'
   entrypoint: 'bash'
   args:
     - '-c'
     - |
-      # Verify current identity
-      echo "Current service account:"
-      gcloud auth list
+      # Show current identity (informational only)
+      echo "Current identity:"
+      gcloud auth list || echo "Could not list auth - continuing anyway"
+      
+      # Set the project explicitly
+      gcloud config set project ${PROJECT_ID}
       
       # If a service account email is provided, impersonate it
       if [ ! -z "${_SERVICE_ACCOUNT}" ]; then
@@ -37,16 +40,13 @@ steps:
         echo "Access token generated and stored for default service account"
       fi
       
-      # Verify project and API access
-      echo "Verifying Vertex AI API access..."
-      gcloud services list --enabled | grep aiplatform || echo "Warning: Vertex AI API may not be enabled"
-      
-      # Set the project explicitly
-      gcloud config set project ${PROJECT_ID}
-      
-      # Verify permissions
-      echo "Checking permissions..."
-      gcloud projects get-iam-policy ${PROJECT_ID} --format=json | grep -i aiplatform || echo "Warning: No explicit Vertex AI permissions found"
+      # Verify token was generated
+      if [ -s access_token.txt ]; then
+        echo "✅ Access token successfully generated"
+      else
+        echo "❌ Failed to generate access token"
+        exit 1
+      fi
 
 # Step 3: Create a RAG Corpus
 - name: 'gcr.io/cloud-builders/curl'
@@ -56,30 +56,58 @@ steps:
     - '-c'
     - |
       apt-get update && apt-get install -y jq curl
-      jq --version 
-
+      
       PROJECT_ID=${PROJECT_ID}
       LOCATION="${_LOCATION}"
       CORPUS_NAME=${_CORPUS_NAME}
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
       
+      # Create a more detailed payload using the substitution variables
       echo "{
-            \"displayName\": \"rag corpus macro data\",
-            \"name\": \"my-corpus-rag\"
-        }" > corpus_payload.json
+        \"displayName\": \"${_CORPUS_DISPLAY_NAME}\",
+        \"name\": \"${_CORPUS_NAME}\"
+      }" > corpus_payload.json
 
+      echo "Payload for RAG corpus creation:"
       cat corpus_payload.json 
 
       # Get the access token from the file created in the authentication step
       ACCESS_TOKEN=$(cat access_token.txt)
       
-      # Create the RAG corpus
-      curl -X POST \
+      echo "Attempting to create RAG corpus in project ${PROJECT_ID}, location $${LOCATION}..."
+      
+      # Create the RAG corpus with better error handling
+      RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer $${ACCESS_TOKEN}" \
         -H "Content-Type: application/json" \
-        -v \
         "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
-        -d @corpus_payload.json
+        -d @corpus_payload.json)
+      
+      # Extract the HTTP status code
+      HTTP_STATUS=$(echo "$${RESPONSE}" | tail -n1)
+      # Extract the response body
+      RESPONSE_BODY=$(echo "$${RESPONSE}" | sed '$ d')
+      
+      echo "Response status code: $${HTTP_STATUS}"
+      echo "Response body:"
+      echo "$${RESPONSE_BODY}" | jq . || echo "$${RESPONSE_BODY}"
+      
+      # Check if the request was successful
+      if [[ "$${HTTP_STATUS}" -ge 200 && "$${HTTP_STATUS}" -lt 300 ]]; then
+        echo "✅ RAG corpus created successfully!"
+      else
+        echo "❌ Failed to create RAG corpus. Status code: $${HTTP_STATUS}"
+        
+        # Provide more detailed error information
+        if [[ "$${HTTP_STATUS}" -eq 401 || "$${HTTP_STATUS}" -eq 403 ]]; then
+          echo "Authentication or permission error. Please ensure:"
+          echo "1. The service account has the 'Vertex AI User' role (roles/aiplatform.user)"
+          echo "2. The Vertex AI API is enabled in your project"
+          echo "3. If using service account impersonation, the impersonating account has permission to impersonate"
+        fi
+        
+        exit 1
+      fi
       
 
 
