@@ -28,10 +28,16 @@ steps:
       apt-get update && apt-get install -y jq curl
       jq --version # Verify jq is installed
       TOKEN=$(cat /workspace/token.txt)
+
+      echo "TOKEN: $TOKEN"
       PROJECT_ID=${PROJECT_ID}
+      echo "PROJECT_ID: $PROJECT_ID"
       LOCATION="${_LOCATION}"
+      echo "LOCATION: $LOCATION"
       CORPUS_NAME=${_CORPUS_NAME}
+      echo "CORPUS_NAME: $CORPUS_NAME"
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
+      echo "DISPLAY_NAME: $DISPLAY_NAME"
       
       # Create the RAG corpus
       curl -X POST \
