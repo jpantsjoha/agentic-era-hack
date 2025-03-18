@@ -38,11 +38,11 @@ steps:
       DISPLAY_NAME=${_CORPUS_DISPLAY_NAME}
       
       echo "{
-            \"displayName\": \"${DISPLAY_NAME}\",
-            \"name\": \"${CORPUS_NAME}\"
+            \"displayName\": \"rag corpus macro data",
+            \"name\": \"my-corpus-rag\"
         }" > corpus_payload.json
 
-      cat ./corpus_response.json 
+      cat ./corpus_payload.json 
 
       # Create the RAG corpus
       curl -X POST \
@@ -52,9 +52,6 @@ steps:
         "https://$${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/$${LOCATION}/ragCorpora" \
         -d @corpus_payload.json
       
-      # Extract the corpus ID for later use
-      cat ./corpus_response.json | jq -r '.name' | cut -d'/' -f6 > ./corpus_id.txt
-      echo "Created RAG Corpus: $$(cat ./corpus_id.txt)"
 
 
 # Substitution variables
