@@ -14,7 +14,7 @@ The function uses Puppeteer for screenshots of financial websites and Gemini Fla
 
 - Processes URLs listed in `DataSources.text`, one per line
 - Uses DEBUG level logging with tabular output for local execution
-- Writes consolidated results to `LatestMacroData.json` in the MacroData-Extracts bucket
+- Writes consolidated results to `LatestMacroData.json` in the Md ageacroData-Extracts bucket
 
 ## Data Requirements
 
@@ -171,7 +171,7 @@ https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html
 
 Each URL will be processed in sequence: a screenshot is taken, then analyzed by Gemini Flash 2.0.
 
-## HLD
+## High Level Design (HLD)
 
 ```bash
                                    +-----------------------------+
