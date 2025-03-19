@@ -1,0 +1,17 @@
+{
+  "name": "puppeteer-screenshot-service",
+  "version": "1.0.0",
+  "description": "Microservice for taking website screenshots with Puppeteer",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "JP",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^21.11.0",
+    "body-parser": "^1.20.2"
+  }
+} 
