@@ -19,18 +19,21 @@ from langchain_core.tools import tool
 from langgraph.graph import END, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from google.cloud import aiplatform
-from google.cloud.aiplatform import generative_models
-from google.cloud.aiplatform.rag import rag
-
-
+from google.genai.types import GenerateContentConfig, Retrieval, Tool, VertexRagStore
+from vertexai import rag 
+from langchain_google_vertexai import ChatVertexAI
+from vertexai.generative_models import (
+    GenerativeModel,
+    GenerationConfig,
+)
 LOCATION = "us-central1"
 LLM_LOCATION = "us-east5"
-LLM = "claude-3-7-sonnet@20250219"
+LLM = "gemini-2.0-flash-001"
 
 
 # Note: We're not explicitly initializing Vertex AI here to be consistent with app/agent.py
 # If you encounter initialization errors, you may need to add:
-aiplatform.init(project='qwiklabs-gcp-00-ec45a6172538', location=LLM_LOCATION)
+aiplatform.init(project='qwiklabs-gcp-00-ec45a6172538', location=LOCATION)
 
 # 1. Define tools
 
@@ -38,7 +41,7 @@ aiplatform.init(project='qwiklabs-gcp-00-ec45a6172538', location=LLM_LOCATION)
 rag_corpus = rag.RagCorpus(f"projects/qwiklabs-gcp-00-ec45a6172538/locations/${LOCATION}/ragCorpora/4611686018427387904")
 
 # Create RAG retrieval tool
-rag_retrieval_tool = generative_models.Tool.from_retrieval(
+rag_retrieval_tool = Tool(
     retrieval=rag.Retrieval(
         source=rag.VertexRagStore(
             rag_resources=[rag.RagResource(rag_corpus=rag_corpus.name)],
@@ -57,110 +60,23 @@ rag_retrieval_tool = generative_models.Tool.from_retrieval(
 def rag_search(query: str) -> str:
     """Search through the RAG corpus for relevant information."""
     # Use the Vertex AI RAG tool to retrieve information
-    model = generative_models.GenerativeModel(
+    model = GenerativeModel(
         LLM,  # Using the LLM constant defined above
-        generation_config=generative_models.GenerationConfig(
+        generation_config=GenerationConfig(
             temperature=0,
             max_output_tokens=1024,
         )
     )
-    response = model.generate_content(
-        [generative_models.Content(
-            parts=[generative_models.Part(text=query)]
-        )],
-        tools=[rag_retrieval_tool]
-    )
-    return response.text
-
+    
+    response = model.generate_content(query)
+    return response
+    
 tools = [rag_search]
 
-# 2. Set up the language model with tools
-# This is a custom function that mimics the behavior of ChatVertexAI.bind_tools()
-def get_claude_with_tools(tools):
-    """Creates a callable that mimics the behavior of a LangChain LLM with bound tools."""
-    
-    def invoke_claude(messages, config=None):
-        """Invokes Claude with the given messages and tools."""
-        # Convert LangChain messages to Vertex AI format
-        vertex_messages = []
-        
-        for msg in messages:
-            if isinstance(msg, dict):
-                # Handle dict-style messages
-                if msg["type"] == "system":
-                    vertex_messages.append(generative_models.Content(
-                        role="user", 
-                        parts=[generative_models.Part(text=msg["content"])]
-                    ))
-                elif msg["type"] == "human":
-                    vertex_messages.append(generative_models.Content(
-                        role="user", 
-                        parts=[generative_models.Part(text=msg["content"])]
-                    ))
-                elif msg["type"] == "ai":
-                    vertex_messages.append(generative_models.Content(
-                        role="model", 
-                        parts=[generative_models.Part(text=msg["content"])]
-                    ))
-            else:
-                # Handle LangChain message objects
-                if msg.type == "human":
-                    vertex_messages.append(generative_models.Content(
-                        role="user", 
-                        parts=[generative_models.Part(text=msg.content)]
-                    ))
-                elif msg.type == "ai":
-                    vertex_messages.append(generative_models.Content(
-                        role="model", 
-                        parts=[generative_models.Part(text=msg.content)]
-                    ))
-        
-        # Create the model
-        model = generative_models.GenerativeModel(
-            LLM,
-            generation_config=generative_models.GenerationConfig(
-                temperature=0,
-                max_output_tokens=1024,
-            )
-        )
-        
-        # Call the Claude model through Vertex AI
-        response = model.generate_content(
-            vertex_messages,
-            tools=[rag_retrieval_tool],
-            stream=config is not None and config.get("callbacks") is not None
-        )
-        
-        # Convert the response back to LangChain format
-        if config is not None and config.get("callbacks") is not None and hasattr(response, 'candidates'):
-            # For streaming responses
-            response_text = response.candidates[0].content.parts[0].text
-        else:
-            # For non-streaming responses
-            response_text = response.text
-        
-        # Create an AIMessage
-        ai_message = AIMessage(content=response_text)
-        
-        # Check if there are tool calls in the response
-        if hasattr(response, 'candidates') and response.candidates and hasattr(response.candidates[0].content.parts[0], 'function_calls'):
-            function_calls = response.candidates[0].content.parts[0].function_calls
-            if function_calls:
-                tool_calls = []
-                for function_call in function_calls:
-                    tool_calls.append({
-                        "name": function_call.name,
-                        "arguments": function_call.args
-                    })
-                ai_message.tool_calls = tool_calls
-        
-        return ai_message
-    
-    return invoke_claude
-
-# Create a callable that mimics a LangChain LLM with bound tools
-llm = get_claude_with_tools(tools)
-
+# 2. Set up the language model
+llm = ChatVertexAI(
+    model=LLM, location=LOCATION, temperature=0, max_tokens=1024, streaming=True
+).bind_tools(tools)
 
 # 3. Define workflow components
 def should_continue(state: MessagesState) -> str:
@@ -176,7 +92,7 @@ def call_model(state: MessagesState, config: RunnableConfig) -> dict[str, BaseMe
         "messages"
     ]
     # Forward the RunnableConfig object to ensure the agent is capable of streaming the response.
-    response = llm(messages_with_system, config)
+    response = llm.invoke(messages_with_system, config)
     return {"messages": response}
 
 
