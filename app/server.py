@@ -22,7 +22,7 @@ from google.cloud import logging as google_cloud_logging
 from langchain_core.runnables import RunnableConfig
 from traceloop.sdk import Instruments, Traceloop
 
-from app.agent import agent
+from app.agent_rag import agent
 from app.utils.tracing import CloudTraceLoggingSpanExporter
 from app.utils.typing import Feedback, InputChat, Request, dumps, ensure_valid_config
 

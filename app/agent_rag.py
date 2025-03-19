@@ -30,7 +30,7 @@ LLM = "claude-3-7-sonnet@20250219"
 
 # Note: We're not explicitly initializing Vertex AI here to be consistent with app/agent.py
 # If you encounter initialization errors, you may need to add:
-# aiplatform.init(project='your-project-id', location=LLM_LOCATION)
+aiplatform.init(project='qwiklabs-gcp-00-ec45a6172538', location=LLM_LOCATION)
 
 # 1. Define tools
 
